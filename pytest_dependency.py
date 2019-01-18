@@ -47,7 +47,7 @@ class DependencyManager(object):
     """Dependency manager, stores the results of tests.
     """
 
-    ScopeCls = {'module':pytest.Module, 'session':pytest.Session}
+    ScopeCls = {'class':pytest.Class, 'module':pytest.Module, 'session':pytest.Session}
 
     @classmethod
     def getManager(cls, item, scope='module'):
@@ -55,16 +55,21 @@ class DependencyManager(object):
         Create it, if not yet present.
         """
         node = item.getparent(cls.ScopeCls[scope])
+        if not node:
+            return None
         if not hasattr(node, 'dependencyManager'):
-            node.dependencyManager = cls()
+            node.dependencyManager = cls(scope)
         return node.dependencyManager
 
-    def __init__(self):
+    def __init__(self, scope):
         self.results = {}
+        self.scope = scope
 
     def addResult(self, item, name, rep):
         if not name:
-            if item.cls:
+            if self.scope == "session":
+                name = item.nodeid.replace("::()::", "::")
+            elif item.cls and self.scope == "module":
                 name = "%s::%s" % (item.cls.__name__, item.name)
             else:
                 name = item.name
@@ -72,14 +77,19 @@ class DependencyManager(object):
         status.addResult(rep)
 
     def checkDepend(self, depends, item):
-        for i in depends:
-            if i in self.results:
-                if self.results[i].isSuccess():
-                    continue
-            else:
-                if _ignore_unknown:
-                    continue
-            pytest.skip("%s depends on %s" % (item.name, i))
+        if depends == "all":
+            for key in self.results:
+                if not self.results[key].isSuccess():
+                    pytest.skip("%s depends on all previous tests passing (%s failed)" % (item.name, key))
+        else:
+            for i in depends:
+                if i in self.results:
+                    if self.results[i].isSuccess():
+                        continue
+                else:
+                    if _ignore_unknown:
+                        continue
+                pytest.skip("%s depends on %s" % (item.name, i))
 
 
 def depends(request, other):
@@ -132,8 +142,11 @@ def pytest_runtest_makereport(item, call):
     if marker is not None or _automark:
         rep = outcome.get_result()
         name = marker.kwargs.get('name') if marker is not None else None
-        manager = DependencyManager.getManager(item)
-        manager.addResult(item, name, rep)
+        """ Store the test outcome for each scope if it exists"""
+        for scope in DependencyManager.ScopeCls:
+            manager = DependencyManager.getManager(item, scope=scope)
+            if(manager):
+                manager.addResult(item, name, rep)
 
 
 def pytest_runtest_setup(item):
@@ -144,5 +157,6 @@ def pytest_runtest_setup(item):
     if marker is not None:
         depends = marker.kwargs.get('depends')
         if depends:
-            manager = DependencyManager.getManager(item)
+            scope = marker.kwargs.get('scope', 'module') if marker is not None else 'module'
+            manager = DependencyManager.getManager(item, scope=scope)
             manager.checkDepend(depends, item)
