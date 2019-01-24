@@ -5,95 +5,114 @@ __revision__ = "$REVISION"
 
 import pytest
 
+_STR_FALSE = ["0", "no", "n", "false", "f", "off"]
+_STR_TRUE = ["1", "yes", "y", "true", "t", "on"]
+
 _automark = False
 _ignore_unknown = False
 
 
 def _get_bool(value):
-    """Evaluate string representation of a boolean value.
     """
-    if value:
-        if value.lower() in ["0", "no", "n", "false", "f", "off"]:
-            return False
-        elif value.lower() in ["1", "yes", "y", "true", "t", "on"]:
-            return True
-        else:
-            raise ValueError("Invalid truth value '%s'" % value)
-    else:
+    Evaluate string representation of a boolean value.
+    """
+    if not value:
         return False
+    if value.lower() in _STR_FALSE:
+        return False
+    if value.lower() in _STR_TRUE:
+        return True
+    raise ValueError("Invalid truth value '%s'" % value)
 
 
 class DependencyItemStatus(object):
-    """Status of a test item in a dependency manager.
+    """
+    Status of a test item in a dependency manager.
     """
 
-    Phases = ('setup', 'call', 'teardown')
+    PHASES = ('setup', 'call', 'teardown')
 
     def __init__(self):
-        self.results = { w:None for w in self.Phases }
+        self.results = {w: None for w in self.PHASES}
 
     def __str__(self):
-        l = ["%s: %s" % (w, self.results[w]) for w in self.Phases]
-        return "Status(%s)" % ", ".join(l)
+        return "Status(%s)" % ", ".join(
+            "%s: %s" % (w, self.results[w])
+            for w in self.PHASES
+        )
 
-    def addResult(self, rep):
+    def add_result(self, rep):
         self.results[rep.when] = rep.outcome
 
-    def isSuccess(self):
+    @property
+    def is_success(self):
         return list(self.results.values()) == ['passed', 'passed', 'passed']
 
 
 class DependencyManager(object):
-    """Dependency manager, stores the results of tests.
+    """
+    Dependency manager, stores the results of tests.
     """
 
-    ScopeCls = {'class':pytest.Class, 'module':pytest.Module, 'session':pytest.Session}
+    SCOPE_CLASSES = {
+        'class': pytest.Class,
+        'module': pytest.Module,
+        'session': pytest.Session,
+    }
 
     @classmethod
-    def getManager(cls, item, scope='module'):
-        """Get the DependencyManager object from the node at scope level.
+    def get_manager(cls, item, scope='module'):
+        """
+        Get the DependencyManager object from the node at scope level.
         Create it, if not yet present.
         """
-        node = item.getparent(cls.ScopeCls[scope])
+        node = item.getparent(cls.SCOPE_CLASSES[scope])
         if not node:
             return None
-        if not hasattr(node, 'dependencyManager'):
-            node.dependencyManager = cls(scope)
-        return node.dependencyManager
+        if not hasattr(node, 'dependency_manager'):
+            node.dependency_manager = cls(scope)
+        return node.dependency_manager
 
     def __init__(self, scope):
         self.results = {}
         self.scope = scope
 
-    def addResult(self, item, name, rep):
-        if not name:
-            if self.scope == "session":
-                name = item.nodeid.replace("::()::", "::")
-            elif item.cls and self.scope == "module":
-                name = "%s::%s" % (item.cls.__name__, item.name)
-            else:
-                name = item.name
-        status = self.results.setdefault(name, DependencyItemStatus())
-        status.addResult(rep)
+    def _gen_name(self, item):
+        if self.scope == "session":
+            return item.nodeid.replace("::()::", "::")
+        if item.cls and self.scope == "module":
+            return "%s::%s" % (item.cls.__name__, item.name)
+        return item.name
 
-    def checkDepend(self, depends, item):
+    def add_result(self, item, name, rep):
+        if not name:
+            name = self._gen_name(item)
+        status = self.results.setdefault(name, DependencyItemStatus())
+        status.add_result(rep)
+
+    def _check_depend_all(self, item):
+        for key in self.results:
+            if self.results[key].is_success:
+                continue
+            pytest.skip("%s depends on all previous tests passing (%s failed)" % (item.name, key))
+
+    def check_depend(self, depends, item):
         if depends == "all":
-            for key in self.results:
-                if not self.results[key].isSuccess():
-                    pytest.skip("%s depends on all previous tests passing (%s failed)" % (item.name, key))
-        else:
-            for i in depends:
-                if i in self.results:
-                    if self.results[i].isSuccess():
-                        continue
-                else:
-                    if _ignore_unknown:
-                        continue
-                pytest.skip("%s depends on %s" % (item.name, i))
+            return self._check_depend_all(item)
+
+        for i in depends:
+            if i in self.results:
+                if self.results[i].is_success:
+                    continue
+            else:
+                if _ignore_unknown:
+                    continue
+            pytest.skip("%s depends on %s" % (item.name, i))
 
 
 def depends(request, other):
-    """Add dependency on other test.
+    """
+    Add dependency on other test.
 
     Call pytest.skip() unless a successful outcome of all of the tests in
     other has been registered previously.  This has the same effect as
@@ -110,53 +129,72 @@ def depends(request, other):
     .. versionadded:: 0.2
     """
     item = request.node
-    manager = DependencyManager.getManager(item)
-    manager.checkDepend(other, item)
+    manager = DependencyManager.get_manager(item)
+    manager.check_depend(other, item)
 
 
 def pytest_addoption(parser):
-    parser.addini("automark_dependency", 
-                  "Add the dependency marker to all tests automatically", 
-                  default=False)
-    parser.addoption("--ignore-unknown-dependency", 
-                     action="store_true", default=False, 
-                     help="ignore dependencies whose outcome is not known")
+    parser.addini(
+        "automark_dependency",
+        "Add the dependency marker to all tests automatically",
+        default=False,
+    )
+    parser.addoption(
+        "--ignore-unknown-dependency",
+        action="store_true",
+        default=False,
+        help="ignore dependencies whose outcome is not known"
+    )
 
 
 def pytest_configure(config):
     global _automark, _ignore_unknown
     _automark = _get_bool(config.getini("automark_dependency"))
     _ignore_unknown = config.getoption("--ignore-unknown-dependency")
-    config.addinivalue_line("markers", 
-                            "dependency(name=None, depends=[]): "
-                            "mark a test to be used as a dependency for "
-                            "other tests or to depend on other tests.")
+    config.addinivalue_line(
+        "markers",
+        "dependency(name=None, depends=[]): "
+        "mark a test to be used as a dependency for "
+        "other tests or to depend on other tests.",
+    )
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """Store the test outcome if this item is marked "dependency".
+    """
+    Store the test outcome if this item is marked "dependency".
     """
     outcome = yield
     marker = item.get_closest_marker("dependency")
-    if marker is not None or _automark:
-        rep = outcome.get_result()
-        name = marker.kwargs.get('name') if marker is not None else None
-        """ Store the test outcome for each scope if it exists"""
-        for scope in DependencyManager.ScopeCls:
-            manager = DependencyManager.getManager(item, scope=scope)
-            if(manager):
-                manager.addResult(item, name, rep)
+    if marker is not None:
+        name = marker.kwargs.get('name')
+    elif _automark:
+        name = None
+    else:
+        return
+
+    rep = outcome.get_result()
+    # Store the test outcome for each scope if it exists
+    for scope in DependencyManager.SCOPE_CLASSES:
+        manager = DependencyManager.get_manager(item, scope=scope)
+        if not manager:
+            continue
+        manager.add_result(item, name, rep)
 
 
 def pytest_runtest_setup(item):
-    """Check dependencies if this item is marked "dependency".
+    """
+    Check dependencies if this item is marked "dependency".
     Skip if any of the dependencies has not been run successfully.
     """
     marker = item.get_closest_marker("dependency")
-    if marker is not None:
-        depends = marker.kwargs.get('depends')
-        if depends:
-            scope = marker.kwargs.get('scope', 'module') if marker is not None else 'module'
-            manager = DependencyManager.getManager(item, scope=scope)
-            manager.checkDepend(depends, item)
+    if marker is None:
+        return
+
+    depends = marker.kwargs.get('depends')
+    if not depends:
+        return
+
+    scope = marker.kwargs.get('scope', 'module')
+    manager = DependencyManager.get_manager(item, scope=scope)
+    manager.check_depend(depends, item)
