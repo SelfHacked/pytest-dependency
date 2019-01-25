@@ -7,7 +7,7 @@ some tests as dependent from other tests.  These tests will then be
 skipped if any of the dependencies did fail or has been skipped.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 import os
 import os.path
@@ -61,8 +61,9 @@ setup(
     long_description=__doc__,
     project_urls={
         'Documentation': 'https://pytest-dependency.readthedocs.io/',
-        'Source Code': 'https://github.com/RKrahl/pytest-dependency',
+        'Source Code': 'https://github.com/SelfHacked/pytest-dependency',
     },
+    python_requires='>=3.6',
     py_modules=['pytest_dependency'],
     install_requires=['pytest >= 3.6.0'],
     classifiers=[
@@ -71,11 +72,6 @@ setup(
         'Intended Audience :: Developers',
         'Topic :: Software Development :: Testing',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Operating System :: OS Independent',

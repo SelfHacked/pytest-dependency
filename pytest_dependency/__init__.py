@@ -1,11 +1,13 @@
 """$DOC"""
+import pytest
+from _pytest.nodes import Item, Node
+from _pytest.reports import TestReport
+from typing import Optional
+
+from .config import Config
 
 __version__ = "$VERSION"
 __revision__ = "$REVISION"
-
-import pytest
-
-from .config import Config
 
 conf = Config()
 
@@ -25,12 +27,14 @@ class Status(object):
         }
 
     def __str__(self):
-        return "Status(%s)" % ", ".join(
-            "%s: %s" % (w, self.__results[w])
-            for w in self.PHASES
+        return "Status({})".format(
+            ", ".join(
+                f"{phase}: {self.__results[phase]}"
+                for phase in self.PHASES
+            )
         )
 
-    def __iadd__(self, report):
+    def __iadd__(self, report: TestReport):
         self.__results[report.when] = report.outcome
         return self
 
@@ -46,22 +50,22 @@ class Dependency(object):
     __DEPENDENCIES = {}
 
     @classmethod
-    def get(cls, item):
+    def get(cls, item: Item) -> 'Dependency':
         return cls.__DEPENDENCIES.setdefault(item, cls(item))
 
-    def __init__(self, item):
+    def __init__(self, item: Item):
         self.__item = item
         self.__status = Status()
 
-    def add_report(self, report):
+    def add_report(self, report: TestReport):
         self.__status += report
 
     @property
-    def item(self):
+    def item(self) -> Item:
         return self.__item
 
     @property
-    def passed(self):
+    def passed(self) -> bool:
         return bool(self.__status)
 
 
@@ -87,12 +91,13 @@ class DependencyManager(object):
     NODE_ATTR = 'dependency_manager'
 
     class DuplicateName(Exception):
-        def __init__(self, name, item):
+        def __init__(self, name, dependency: Dependency):
             self.name = name
-            self.item = item
+            self.dependency = dependency
+            super().__init__(f"Name {name} has been used by a different dependency")
 
     @classmethod
-    def get(cls, item, scope=SCOPE_DEFAULT):
+    def get(cls, item: Item, scope=SCOPE_DEFAULT) -> Optional['DependencyManager']:
         """
         Get the DependencyManager object from the node at scope level.
         Create it, if not yet present.
@@ -102,19 +107,18 @@ class DependencyManager(object):
             return None
         if not hasattr(node, cls.NODE_ATTR):
             setattr(node, cls.NODE_ATTR, cls(node, scope))
-        return node.dependency_manager
+        return getattr(node, cls.NODE_ATTR)
 
-    def __init__(self, node, scope):
+    def __init__(self, node: Node, scope):
         self.__node = node
         self.__scope = scope
         self.__items = {}
 
-    def _gen_name(self, item):
-        item = item.item
+    def _gen_name(self, item: Item) -> str:
         if self.__scope == self.SCOPE_SESSION:
             return item.nodeid.replace("::()::", "::")
-        if item.cls and self.__scope == self.SCOPE_MODULE:
-            return "%s::%s" % (item.cls.__name__, item.name)
+        if self.__scope == self.SCOPE_MODULE and item.cls:
+            return f"{item.cls.__name__}::{item.name}"
         return item.name
 
     def __contains__(self, name):
@@ -123,35 +127,42 @@ class DependencyManager(object):
     def __iter__(self):
         return iter(self.__items)
 
-    def __getitem__(self, name):
+    def __getitem__(self, name) -> Dependency:
         return self.__items[name]
 
-    def __setitem__(self, name, item):
+    def __setitem__(self, name, dependency: Dependency):
         if not name:
-            name = self._gen_name(item)
+            name = self._gen_name(dependency.item)
         if name in self:
-            if self[name] != item:
-                raise self.DuplicateName(name, item)
-        self.__items[name] = item
+            if self[name] != dependency:
+                raise self.DuplicateName(name, dependency)
+        self.__items[name] = dependency
 
-    def _check_depend_all(self, item):
-        for key in self:
-            if self[key].passed:
+    def keys(self):
+        return self.__items.keys()
+
+    def values(self):
+        return self.__items.values()
+
+    def _check_depend_all(self, item: Item):
+        for name in self:
+            if self[name].passed:
                 continue
-            pytest.skip("%s depends on all previous tests passing (%s failed)" % (item.name, key))
+            pytest.skip(
+                f"{item.name} depends on all previous tests passing ({name} failed)")
 
-    def check_depend(self, dependencies, item):
-        if dependencies == self.DEPEND_ALL:
+    def check_depend(self, names, item: Item):
+        if names == self.DEPEND_ALL:
             return self._check_depend_all(item)
 
-        for name in dependencies:
+        for name in names:
             if name in self:
                 if self[name].passed:
                     continue
             else:
                 if conf.ignore_unknown:
                     continue
-            pytest.skip("%s depends on %s" % (item.name, name))
+            pytest.skip(f"{item.name} depends on {name}")
 
 
 def depends(request, other, scope=DependencyManager.SCOPE_DEFAULT):
@@ -185,7 +196,7 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     conf.pytest_configure(config)
     config.addinivalue_line(
-        "markers",
+        'markers',
         "dependency(name=None, depends=[]): "
         "mark a test to be used as a dependency for "
         "other tests or to depend on other tests.",
@@ -198,7 +209,7 @@ def pytest_runtest_makereport(item, call):
     Store the test outcome if this item is marked "dependency".
     """
     outcome = yield
-    marker = item.get_closest_marker("dependency")
+    marker = item.get_closest_marker('dependency')
     if marker is not None:
         name = marker.kwargs.get('name')
     elif conf.auto_mark:
@@ -212,17 +223,17 @@ def pytest_runtest_makereport(item, call):
     # Store the test outcome for each scope if it exists
     for scope in DependencyManager.SCOPE_CLASSES:
         manager = DependencyManager.get(item, scope=scope)
-        if not manager:
+        if manager is None:
             continue
         manager[name] = dependency
 
 
-def pytest_runtest_setup(item):
+def pytest_runtest_setup(item: Item):
     """
     Check dependencies if this item is marked "dependency".
     Skip if any of the dependencies has not been run successfully.
     """
-    marker = item.get_closest_marker("dependency")
+    marker = item.get_closest_marker('dependency')
     if marker is None:
         return
 
@@ -230,6 +241,6 @@ def pytest_runtest_setup(item):
     if not dependencies:
         return
 
-    scope = marker.kwargs.get('scope', 'module')
+    scope = marker.kwargs.get('scope', DependencyManager.SCOPE_DEFAULT)
     manager = DependencyManager.get(item, scope=scope)
     manager.check_depend(dependencies, item)
