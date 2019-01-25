@@ -1,7 +1,6 @@
-"""Usage with test classes.
 """
-
-import pytest
+Usage with test classes.
+"""
 
 
 def test_class_simple(ctestdir):

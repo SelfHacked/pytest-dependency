@@ -1,7 +1,6 @@
-"""Using depends() to mark dependencies at runtime.
 """
-
-import pytest
+Using depends() to mark dependencies at runtime.
+"""
 
 
 def test_skip_depend_runtime(ctestdir):

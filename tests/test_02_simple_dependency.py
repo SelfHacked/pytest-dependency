@@ -1,7 +1,6 @@
-"""Simple dependencies between tests.
 """
-
-import pytest
+Simple dependencies between tests.
+"""
 
 
 def test_no_skip(ctestdir):

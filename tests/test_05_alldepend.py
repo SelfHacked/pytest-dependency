@@ -1,7 +1,6 @@
-"""Test the "all" dependency.
 """
-
-import pytest
+Test the "all" dependency.
+"""
 
 
 def test_all(ctestdir):

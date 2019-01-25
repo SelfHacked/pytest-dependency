@@ -1,7 +1,6 @@
-"""Test the automark_dependency option.
 """
-
-import pytest
+Test the automark_dependency option.
+"""
 
 
 def test_not_set(ctestdir):

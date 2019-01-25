@@ -1,7 +1,6 @@
-"""Test the ignore-unknown-dependency command line option.
 """
-
-import pytest
+Test the ignore-unknown-dependency command line option.
+"""
 
 
 def test_no_ignore(ctestdir):
@@ -64,7 +63,7 @@ def test_ignore(ctestdir):
         def test_d():
             pass
     """)
-    result = ctestdir.runpytest("--verbose", "--ignore-unknown-dependency", 
+    result = ctestdir.runpytest("--verbose", "--ignore-unknown-dependency",
                                 "test_ignore.py::test_d")
     result.assert_outcomes(passed=1, skipped=0, failed=0)
     result.stdout.fnmatch_lines("""

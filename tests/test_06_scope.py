@@ -1,6 +1,3 @@
-
-
-
 def test_class_scope(ctestdir):
     """ test_a fails, however the scope of the dependency of TestClass::test_b
     causes it to only depend on other tests within its class.  test_d failing
@@ -156,8 +153,6 @@ def test_session_scope_three_files(ctestdir):
         *::test_2 SKIPPED
         *::test_3 PASSED
     """)
-
-
 
 
 def test_complex_scope(ctestdir):

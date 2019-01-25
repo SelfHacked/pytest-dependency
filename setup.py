@@ -1,5 +1,6 @@
 #! /usr/bin/python
-"""pytest-dependency - Manage dependencies of tests
+"""
+pytest-dependency - Manage dependencies of tests
 
 This pytest plugin manages dependencies of tests.  It allows to mark
 some tests as dependent from other tests.  These tests will then be
@@ -11,22 +12,25 @@ __version__ = "0.4.0"
 import os
 import os.path
 import re
-from setuptools import setup
 import setuptools.command.sdist as st_sdist
+from setuptools import setup
 
 
 def _filter_file(src, dest, subst):
     """Copy src to dest doing substitutions on the fly.
     """
     substre = re.compile(r'\$(%s)' % '|'.join(subst.keys()))
+
     def repl(m):
         return subst[m.group(1)]
+
     with open(src, "rt") as sf, open(dest, "wt") as df:
         while True:
             l = sf.readline()
             if not l:
                 break
             df.write(re.sub(substre, repl, l))
+
 
 class sdist(st_sdist.sdist):
     def make_release_tree(self, base_dir, files):
@@ -82,5 +86,5 @@ setup(
             'dependency = pytest_dependency',
         ],
     },
-    cmdclass = {'sdist': sdist},
+    cmdclass={'sdist': sdist},
 )

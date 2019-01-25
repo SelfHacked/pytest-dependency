@@ -1,7 +1,6 @@
-"""Verify the messages issued when a dependent test is skipped.
 """
-
-import pytest
+Verify the messages issued when a dependent test is skipped.
+"""
 
 
 def test_simple(ctestdir):
