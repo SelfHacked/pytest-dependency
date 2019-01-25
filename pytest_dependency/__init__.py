@@ -5,10 +5,9 @@ __revision__ = "$REVISION"
 
 import pytest
 
-from .util import str_to_bool
+from .config import Config
 
-_automark = False
-_ignore_unknown = False
+conf = Config()
 
 
 class DependencyItemStatus(object):
@@ -91,7 +90,7 @@ class DependencyManager(object):
                 if self.results[i].is_success:
                     continue
             else:
-                if _ignore_unknown:
+                if conf.ignore_unknown:
                     continue
             pytest.skip("%s depends on %s" % (item.name, i))
 
@@ -120,23 +119,11 @@ def depends(request, other):
 
 
 def pytest_addoption(parser):
-    parser.addini(
-        "automark_dependency",
-        "Add the dependency marker to all tests automatically",
-        default=False,
-    )
-    parser.addoption(
-        "--ignore-unknown-dependency",
-        action="store_true",
-        default=False,
-        help="ignore dependencies whose outcome is not known"
-    )
+    conf.pytest_addoption(parser)
 
 
 def pytest_configure(config):
-    global _automark, _ignore_unknown
-    _automark = str_to_bool(config.getini("automark_dependency"))
-    _ignore_unknown = config.getoption("--ignore-unknown-dependency")
+    conf.pytest_configure(config)
     config.addinivalue_line(
         "markers",
         "dependency(name=None, depends=[]): "
@@ -154,7 +141,7 @@ def pytest_runtest_makereport(item, call):
     marker = item.get_closest_marker("dependency")
     if marker is not None:
         name = marker.kwargs.get('name')
-    elif _automark:
+    elif conf.auto_mark:
         name = None
     else:
         return
