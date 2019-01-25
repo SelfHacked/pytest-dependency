@@ -40,14 +40,22 @@ class DependencyManager(object):
     Dependency manager, stores the results of tests.
     """
 
+    SCOPE_MODULE = 'module'
+    SCOPE_CLASS = 'class'
+    SCOPE_SESSION = 'session'
+
+    SCOPE_DEFAULT = SCOPE_MODULE
+
     SCOPE_CLASSES = {
-        'class': pytest.Class,
-        'module': pytest.Module,
-        'session': pytest.Session,
+        SCOPE_MODULE: pytest.Module,
+        SCOPE_CLASS: pytest.Class,
+        SCOPE_SESSION: pytest.Session,
     }
 
+    DEPEND_ALL = 'all'
+
     @classmethod
-    def get_manager(cls, item, scope='module'):
+    def get_manager(cls, item, scope=SCOPE_DEFAULT):
         """
         Get the DependencyManager object from the node at scope level.
         Create it, if not yet present.
@@ -64,9 +72,9 @@ class DependencyManager(object):
         self.scope = scope
 
     def _gen_name(self, item):
-        if self.scope == "session":
+        if self.scope == self.SCOPE_SESSION:
             return item.nodeid.replace("::()::", "::")
-        if item.cls and self.scope == "module":
+        if item.cls and self.scope == self.SCOPE_MODULE:
             return "%s::%s" % (item.cls.__name__, item.name)
         return item.name
 
@@ -83,7 +91,7 @@ class DependencyManager(object):
             pytest.skip("%s depends on all previous tests passing (%s failed)" % (item.name, key))
 
     def check_depend(self, dependencies, item):
-        if dependencies == "all":
+        if dependencies == self.DEPEND_ALL:
             return self._check_depend_all(item)
 
         for name in dependencies:
@@ -96,7 +104,7 @@ class DependencyManager(object):
             pytest.skip("%s depends on %s" % (item.name, name))
 
 
-def depends(request, other):
+def depends(request, other, scope=DependencyManager.SCOPE_DEFAULT):
     """
     Add dependency on other test.
 
@@ -110,12 +118,13 @@ def depends(request, other):
         to the current test.
     :param other: dependencies, a list of names of tests that this
         test depends on.
+    :param scope:
     :type other: iterable of :class:`str`
 
     .. versionadded:: 0.2
     """
     item = request.node
-    manager = DependencyManager.get_manager(item)
+    manager = DependencyManager.get_manager(item, scope=scope)
     manager.check_depend(other, item)
 
 
