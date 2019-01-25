@@ -16,6 +16,7 @@ class DependencyItemStatus(object):
     """
 
     PHASES = ('setup', 'call', 'teardown')
+    SUCCESS = ['passed', 'passed', 'passed']
 
     def __init__(self):
         self.results = {w: None for w in self.PHASES}
@@ -31,7 +32,7 @@ class DependencyItemStatus(object):
 
     @property
     def is_success(self):
-        return list(self.results.values()) == ['passed', 'passed', 'passed']
+        return list(self.results.values()) == self.SUCCESS
 
 
 class DependencyManager(object):
@@ -81,18 +82,18 @@ class DependencyManager(object):
                 continue
             pytest.skip("%s depends on all previous tests passing (%s failed)" % (item.name, key))
 
-    def check_depend(self, depends, item):
-        if depends == "all":
+    def check_depend(self, dependencies, item):
+        if dependencies == "all":
             return self._check_depend_all(item)
 
-        for i in depends:
-            if i in self.results:
-                if self.results[i].is_success:
+        for name in dependencies:
+            if name in self.results:
+                if self.results[name].is_success:
                     continue
             else:
                 if conf.ignore_unknown:
                     continue
-            pytest.skip("%s depends on %s" % (item.name, i))
+            pytest.skip("%s depends on %s" % (item.name, name))
 
 
 def depends(request, other):
@@ -164,10 +165,10 @@ def pytest_runtest_setup(item):
     if marker is None:
         return
 
-    depends = marker.kwargs.get('depends')
-    if not depends:
+    dependencies = marker.kwargs.get('depends')
+    if not dependencies:
         return
 
     scope = marker.kwargs.get('scope', 'module')
     manager = DependencyManager.get_manager(item, scope=scope)
-    manager.check_depend(depends, item)
+    manager.check_depend(dependencies, item)
