@@ -5,24 +5,10 @@ __revision__ = "$REVISION"
 
 import pytest
 
-_STR_FALSE = ["0", "no", "n", "false", "f", "off"]
-_STR_TRUE = ["1", "yes", "y", "true", "t", "on"]
+from .util import str_to_bool
 
 _automark = False
 _ignore_unknown = False
-
-
-def _get_bool(value):
-    """
-    Evaluate string representation of a boolean value.
-    """
-    if not value:
-        return False
-    if value.lower() in _STR_FALSE:
-        return False
-    if value.lower() in _STR_TRUE:
-        return True
-    raise ValueError("Invalid truth value '%s'" % value)
 
 
 class DependencyItemStatus(object):
@@ -149,7 +135,7 @@ def pytest_addoption(parser):
 
 def pytest_configure(config):
     global _automark, _ignore_unknown
-    _automark = _get_bool(config.getini("automark_dependency"))
+    _automark = str_to_bool(config.getini("automark_dependency"))
     _ignore_unknown = config.getoption("--ignore-unknown-dependency")
     config.addinivalue_line(
         "markers",
