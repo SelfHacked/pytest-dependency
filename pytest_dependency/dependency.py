@@ -1,7 +1,7 @@
 import pytest
 from _pytest.nodes import Item, Node
 from _pytest.reports import TestReport
-from typing import Optional
+from typing import Optional, Mapping
 
 from .config import conf
 
@@ -63,7 +63,7 @@ class Dependency(object):
         return bool(self.__status)
 
 
-class DependencyManager(object):
+class DependencyManager(Mapping[str, Dependency]):
     """
     Dependency manager, stores the results of tests.
     """
@@ -117,6 +117,9 @@ class DependencyManager(object):
 
     def __contains__(self, name):
         return name in self.__items
+
+    def __len__(self):
+        return len(self.__items)
 
     def __iter__(self):
         return iter(self.__items)
