@@ -1,9 +1,8 @@
 """$DOC"""
 import pytest
-from _pytest.nodes import Item
 
 from .config import conf
-from .dependency import Dependency, DependencyManager
+from .dependency import Item, DependencyManager
 
 __version__ = "$VERSION"
 __revision__ = "$REVISION"
@@ -29,12 +28,11 @@ def depends(request, other, scope=DependencyManager.SCOPE_DEFAULT):
     .. versionadded:: 0.2
     """
     item = request.node
-    manager = DependencyManager.get(item, scope=scope)
-    manager.check_depend(other, item)
+    return DependencyManager.dynamic_check(item, names=other, scope=scope)
 
 
 def pytest_addoption(parser):
-    conf.pytest_addoption(parser)
+    return conf.pytest_addoption(parser)
 
 
 def pytest_configure(config):
@@ -52,40 +50,12 @@ def pytest_runtest_makereport(item, call):
     """
     Store the test outcome if this item is marked "dependency".
     """
-    outcome = yield
-    marker = item.get_closest_marker('dependency')
-    if marker is not None:
-        name = marker.kwargs.get('name')
-    elif conf.auto_mark:
-        name = None
-    else:
-        return
-
-    dependency = Dependency.get(item)
-    report = outcome.get_result()
-    dependency.add_report(report)
-    # Store the test outcome for each scope if it exists
-    for scope in DependencyManager.SCOPE_CLASSES:
-        try:
-            manager = DependencyManager.get(item, scope=scope)
-        except DependencyManager.InvalidNode:
-            continue
-        manager[name] = dependency
+    return Item.get(item).pytest_runtest_makereport()
 
 
-def pytest_runtest_setup(item: Item):
+def pytest_runtest_setup(item):
     """
     Check dependencies if this item is marked "dependency".
     Skip if any of the dependencies has not been run successfully.
     """
-    marker = item.get_closest_marker('dependency')
-    if marker is None:
-        return
-
-    dependencies = marker.kwargs.get('depends')
-    if not dependencies:
-        return
-
-    scope = marker.kwargs.get('scope', DependencyManager.SCOPE_DEFAULT)
-    manager = DependencyManager.get(item, scope=scope)
-    manager.check_depend(dependencies, item)
+    return Item.get(item).pytest_runtest_setup()

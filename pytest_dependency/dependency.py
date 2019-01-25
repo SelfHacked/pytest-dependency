@@ -1,5 +1,5 @@
 import pytest
-from _pytest.nodes import Item, Node
+from _pytest.nodes import Item as PytestItem, Node
 from _pytest.reports import TestReport
 from typing import Mapping
 
@@ -36,7 +36,7 @@ class Status(object):
         return list(self.__results.values()) == self.SUCCESS
 
 
-class Dependency(object):
+class Item(object):
     """
     Test item
     """
@@ -44,10 +44,10 @@ class Dependency(object):
     __DEPENDENCIES = {}
 
     @classmethod
-    def get(cls, item: Item) -> 'Dependency':
+    def get(cls, item: PytestItem) -> 'Item':
         return cls.__DEPENDENCIES.setdefault(item, cls(item))
 
-    def __init__(self, item: Item):
+    def __init__(self, item: PytestItem):
         self.__item = item
         self.__status = Status()
 
@@ -55,15 +55,48 @@ class Dependency(object):
         self.__status += report
 
     @property
-    def item(self) -> Item:
+    def item(self) -> PytestItem:
         return self.__item
 
     @property
     def passed(self) -> bool:
         return bool(self.__status)
 
+    def pytest_runtest_setup(self):
+        marker = self.item.get_closest_marker('dependency')
+        if marker is None:
+            return
 
-class DependencyManager(Mapping[str, Dependency]):
+        dependencies = marker.kwargs.get('depends')
+        if not dependencies:
+            return
+
+        scope = marker.kwargs.get('scope', DependencyManager.SCOPE_DEFAULT)
+        manager = DependencyManager.get(self.item, scope=scope)
+        manager.check_depend(dependencies, self.item)
+
+    def pytest_runtest_makereport(self):
+        outcome = yield
+        marker = self.item.get_closest_marker('dependency')
+        if marker is not None:
+            name = marker.kwargs.get('name')
+        elif conf.auto_mark:
+            name = None
+        else:
+            return
+
+        report = outcome.get_result()
+        self.add_report(report)
+        # Store the test outcome for each scope if it exists
+        for scope in DependencyManager.SCOPE_CLASSES:
+            try:
+                manager = DependencyManager.get(self.item, scope=scope)
+            except DependencyManager.InvalidNode:
+                continue
+            manager[name] = self
+
+
+class DependencyManager(Mapping[str, Item]):
     """
     Dependency manager, stores the results of tests.
     """
@@ -91,13 +124,13 @@ class DependencyManager(Mapping[str, Dependency]):
             super().__init__(f"Item {item} has no scope {scope}")
 
     class DuplicateName(Exception):
-        def __init__(self, name, dependency: Dependency):
+        def __init__(self, name, dependency: Item):
             self.name = name
             self.dependency = dependency
             super().__init__(f"Name {name} has been used by a different dependency")
 
     @classmethod
-    def get(cls, item: Item, scope=SCOPE_DEFAULT) -> 'DependencyManager':
+    def get(cls, item: PytestItem, scope=SCOPE_DEFAULT) -> 'DependencyManager':
         """
         Get the DependencyManager object from the node at scope level.
         Create it, if not yet present.
@@ -114,7 +147,7 @@ class DependencyManager(Mapping[str, Dependency]):
         self.__scope = scope
         self.__items = {}
 
-    def _gen_name(self, item: Item) -> str:
+    def _gen_name(self, item: PytestItem) -> str:
         if self.__scope == self.SCOPE_SESSION:
             return item.nodeid.replace("::()::", "::")
         if self.__scope == self.SCOPE_MODULE and item.cls:
@@ -130,10 +163,10 @@ class DependencyManager(Mapping[str, Dependency]):
     def __iter__(self):
         return iter(self.__items)
 
-    def __getitem__(self, name) -> Dependency:
+    def __getitem__(self, name) -> Item:
         return self.__items[name]
 
-    def __setitem__(self, name, dependency: Dependency):
+    def __setitem__(self, name, dependency: Item):
         if not name:
             name = self._gen_name(dependency.item)
         if name in self:
@@ -147,14 +180,14 @@ class DependencyManager(Mapping[str, Dependency]):
     def values(self):
         return self.__items.values()
 
-    def _check_depend_all(self, item: Item):
+    def _check_depend_all(self, item: PytestItem):
         for name in self:
             if self[name].passed:
                 continue
             pytest.skip(
                 f"{item.name} depends on all previous tests passing ({name} failed)")
 
-    def check_depend(self, names, item: Item):
+    def check_depend(self, names, item: PytestItem):
         if names == self.DEPEND_ALL:
             return self._check_depend_all(item)
 
@@ -166,3 +199,8 @@ class DependencyManager(Mapping[str, Dependency]):
                 if conf.ignore_unknown:
                     continue
             pytest.skip(f"{item.name} depends on {name}")
+
+    @classmethod
+    def dynamic_check(cls, item: PytestItem, names, scope=SCOPE_DEFAULT):
+        manager = cls.get(item, scope=scope)
+        manager.check_depend(names, item)
