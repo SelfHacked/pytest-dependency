@@ -1,7 +1,7 @@
 import pytest
 from _pytest.nodes import Item, Node
 from _pytest.reports import TestReport
-from typing import Optional, Mapping
+from typing import Mapping
 
 from .config import conf
 
@@ -84,6 +84,12 @@ class DependencyManager(Mapping[str, Dependency]):
 
     NODE_ATTR = 'dependency_manager'
 
+    class InvalidNode(Exception):
+        def __init__(self, item, scope):
+            self.item = item
+            self.scope = scope
+            super().__init__(f"Item {item} has no scope {scope}")
+
     class DuplicateName(Exception):
         def __init__(self, name, dependency: Dependency):
             self.name = name
@@ -91,14 +97,14 @@ class DependencyManager(Mapping[str, Dependency]):
             super().__init__(f"Name {name} has been used by a different dependency")
 
     @classmethod
-    def get(cls, item: Item, scope=SCOPE_DEFAULT) -> Optional['DependencyManager']:
+    def get(cls, item: Item, scope=SCOPE_DEFAULT) -> 'DependencyManager':
         """
         Get the DependencyManager object from the node at scope level.
         Create it, if not yet present.
         """
         node = item.getparent(cls.SCOPE_CLASSES[scope])
         if not node:
-            return None
+            raise cls.InvalidNode(item, scope)
         if not hasattr(node, cls.NODE_ATTR):
             setattr(node, cls.NODE_ATTR, cls(node, scope))
         return getattr(node, cls.NODE_ATTR)

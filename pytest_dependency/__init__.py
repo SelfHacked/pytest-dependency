@@ -66,8 +66,9 @@ def pytest_runtest_makereport(item, call):
     dependency.add_report(report)
     # Store the test outcome for each scope if it exists
     for scope in DependencyManager.SCOPE_CLASSES:
-        manager = DependencyManager.get(item, scope=scope)
-        if manager is None:
+        try:
+            manager = DependencyManager.get(item, scope=scope)
+        except DependencyManager.InvalidNode:
             continue
         manager[name] = dependency
 
