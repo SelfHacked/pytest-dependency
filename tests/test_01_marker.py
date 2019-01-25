@@ -20,7 +20,7 @@ def test_marker(ctestdir):
             node = request.node.getparent(pytest.Module)
             assert hasattr(node, 'dependency_manager')
             assert isinstance(node.dependency_manager, DependencyManager)
-            assert 'test_marker' in node.dependency_manager.results
+            assert 'test_marker' in node.dependency_manager
     """)
     result = ctestdir.runpytest("--verbose")
     result.assert_outcomes(passed=1)
