@@ -26,3 +26,6 @@ class Config(object):
     def pytest_configure(self, config):
         self.auto_mark = str_to_bool(config.getini(self.AUTO_MARK))
         self.ignore_unknown = config.getoption(self.IGNORE_UNKNOWN)
+
+
+conf = Config()
