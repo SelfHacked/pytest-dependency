@@ -3,6 +3,7 @@ import pytest
 
 from .config import conf
 from .dependency import Dependency, Item, DependencyFinder
+from .order import TestOrganizer
 
 __version__ = "$VERSION"
 __revision__ = "$REVISION"
@@ -59,3 +60,8 @@ def pytest_runtest_setup(item):
     Skip if any of the dependencies has not been run successfully.
     """
     return Item.get(item).check_skip()
+
+
+def pytest_collection_modifyitems(session, config, items):
+    organizer = TestOrganizer(*items)
+    items[:] = list(organizer)

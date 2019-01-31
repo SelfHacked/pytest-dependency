@@ -107,10 +107,21 @@ class AbstractItem(object):
     def pytest_item(self) -> PytestItem:
         return self.__item
 
+    @property
+    def item_name(self):
+        return self.pytest_item.name
+
+    @property
+    def display_name(self):
+        return self.item_name
+
     def pytest_runtest_makereport(self):
         raise NotImplementedError
 
     def check_skip(self, *dependencies: Dependency):
+        raise NotImplementedError
+
+    def depend_items_setup(self) -> Iterable['Item']:
         raise NotImplementedError
 
     def __repr__(self):
@@ -123,6 +134,9 @@ class DummyItem(AbstractItem):
 
     def check_skip(self, *dependencies: Dependency):
         pass
+
+    def depend_items_setup(self) -> Iterable['Item']:
+        yield from ()
 
 
 class Item(AbstractItem):
@@ -146,7 +160,6 @@ class Item(AbstractItem):
 
     def __init__(self, item: PytestItem):
         super().__init__(item)
-        self.__name = item.name
         self.__marker = Marker.get(item)
         if self.__marker is None:
             if not conf.auto_mark:
@@ -156,10 +169,6 @@ class Item(AbstractItem):
 
     def add_report(self, report: TestReport):
         self.__status += report
-
-    @property
-    def item_name(self):
-        return self.__name
 
     @property
     def marker_name(self):
@@ -197,15 +206,13 @@ class Item(AbstractItem):
             return
         yield from Dependency.read_marker(self.marker)
 
+    def depend_items_setup(self) -> Iterable['Item']:
+        yield from tuple(DependencyFinder.find_all(self, False, *self.dependencies))
+
     def depend_items(self, *dependencies: Dependency) -> Iterable['Item']:
         if not dependencies:
             dependencies = self.dependencies
-        for dependency in dependencies:
-            try:
-                yield DependencyFinder.get(self, dependency.scope)[dependency.name]
-            except DependencyFinder.DependencyNotFound:
-                if not conf.ignore_unknown:
-                    raise
+        yield from DependencyFinder.find_all(self, conf.ignore_unknown, *dependencies)
 
     def check_skip(self, *dependencies: Dependency):
         try:
@@ -312,3 +319,17 @@ class DependencyFinder(object):
             if self[name] != item:
                 raise self.DuplicateName(name, item)
         self.__items[name] = item
+
+    @classmethod
+    def find_all(
+            cls,
+            item: Item,
+            ignore_unknown: bool,
+            *dependencies: Dependency,
+    ) -> Iterable[Item]:
+        for dependency in dependencies:
+            try:
+                yield DependencyFinder.get(item, dependency.scope)[dependency.name]
+            except DependencyFinder.DependencyNotFound:
+                if not ignore_unknown:
+                    raise
