@@ -2,13 +2,13 @@
 import pytest
 
 from .config import conf
-from .dependency import Item, DependencyManager
+from .dependency import Dependency, Item, DependencyFinder
 
 __version__ = "$VERSION"
 __revision__ = "$REVISION"
 
 
-def depends(request, other, scope=DependencyManager.SCOPE_DEFAULT):
+def depends(request, other, scope=Dependency.SCOPE_DEFAULT):
     """
     Add dependency on other test.
 
@@ -28,7 +28,7 @@ def depends(request, other, scope=DependencyManager.SCOPE_DEFAULT):
     .. versionadded:: 0.2
     """
     item = request.node
-    return DependencyManager.dynamic_check(item, names=other, scope=scope)
+    Item.get(item).check_skip(*Dependency.read_list(scope, *other))
 
 
 def pytest_addoption(parser):
@@ -58,4 +58,4 @@ def pytest_runtest_setup(item):
     Check dependencies if this item is marked "dependency".
     Skip if any of the dependencies has not been run successfully.
     """
-    return Item.get(item).pytest_runtest_setup()
+    return Item.get(item).check_skip()

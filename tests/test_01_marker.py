@@ -13,14 +13,14 @@ def test_marker_registered(ctestdir):
 def test_marker(ctestdir):
     ctestdir.makepyfile("""
         import pytest
-        from pytest_dependency import DependencyManager
+        from pytest_dependency import DependencyFinder
 
         @pytest.mark.dependency()
         def test_marker(request):
             node = request.node.getparent(pytest.Module)
-            assert hasattr(node, 'dependency_manager')
-            assert isinstance(node.dependency_manager, DependencyManager)
-            assert 'test_marker' in node.dependency_manager
+            assert hasattr(node, 'dependency_finder')
+            assert isinstance(node.dependency_finder, DependencyFinder)
+            assert 'test_marker' in node.dependency_finder
     """)
     result = ctestdir.runpytest("--verbose")
     result.assert_outcomes(passed=1)

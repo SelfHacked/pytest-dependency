@@ -17,7 +17,7 @@ def test_class_scope(ctestdir):
             def test_a(self):
                 pass
 
-            @pytest.mark.dependency(scope="class", depends="all")
+            @pytest.mark.dependency(scope="class", depends=['test_a'])
             def test_b(self):
                 pass
 
@@ -25,7 +25,7 @@ def test_class_scope(ctestdir):
             def test_c(self):
                 assert False
 
-            @pytest.mark.dependency(scope="class", depends="all")
+            @pytest.mark.dependency(scope="class", depends=['test_a', 'test_b', 'test_c'])
             def test_d(self):
                 pass
 
@@ -152,92 +152,4 @@ def test_session_scope_three_files(ctestdir):
         *::test_1 SKIPPED
         *::test_2 SKIPPED
         *::test_3 PASSED
-    """)
-
-
-def test_complex_scope(ctestdir):
-    """ A complex test of scope utilizing module, class and session scopes.  Also utilizing the
-    depends="all" modifier """
-    test_file1 = """
-        import pytest
-
-        @pytest.mark.dependency()
-        def test_a():
-            assert False
-
-        @pytest.mark.dependency()
-        def test_b():
-            pass
-
-        @pytest.mark.dependency(depends="all")
-        def test_c():
-            pass
-
-        @pytest.mark.dependency(depends=["test_c"])
-        def test_d():
-            pass
-
-        class TestFile1():
-            @pytest.mark.dependency()
-            def test_0(self):
-                pass
-    """
-
-    test_file2 = """
-        import pytest
-
-        def test_v():
-            pass
-
-        @pytest.mark.dependency(scope="session", depends="all")
-        def test_w():
-            pass
-
-        @pytest.mark.dependency(scope="session", depends=["test_a.py::TestFile1::test_0"])
-        def test_x():
-            pass
-
-        class TestFile2():
-            def test_0(self):
-                pass
-
-            @pytest.mark.dependency(scope="class", depends="all")
-            def test_1(self):
-                pass
-
-            @pytest.mark.dependency(scope="module", depends="all")
-            def test_2(self):
-                pass
-
-            @pytest.mark.dependency(scope="session", depends="all")
-            def test_3(self):
-                pass
-
-        @pytest.mark.dependency(scope="session", depends=["test_a.py::test_b"])
-        def test_y():
-            pass
-
-        @pytest.mark.dependency(scope="session", depends=["test_a.py::test_a"])
-        def test_z():
-            pass
-    """
-    ctestdir.makepyfile(test_a=test_file1, test_b=test_file2)
-
-    result = ctestdir.runpytest("--verbose", "test_a.py", "test_b.py")
-    result.assert_outcomes(passed=7, skipped=6, failed=1)
-    result.stdout.fnmatch_lines("""
-        *::test_a FAILED
-        *::test_b PASSED
-        *::test_c SKIPPED
-        *::test_d SKIPPED
-        *::TestFile1::test_0 PASSED
-        *::test_v PASSED
-        *::test_w SKIPPED
-        *::test_x PASSED
-        *::TestFile2::test_0 PASSED
-        *::TestFile2::test_1 PASSED
-        *::TestFile2::test_2 SKIPPED
-        *::TestFile2::test_3 SKIPPED
-        *::test_y PASSED
-        *::test_z SKIPPED
     """)
