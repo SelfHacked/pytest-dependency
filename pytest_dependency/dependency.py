@@ -65,6 +65,9 @@ class Dependency(object):
 
         yield from cls.read_list(scope, *marker.depend_list)
 
+    def __repr__(self):
+        return f"{self.__class__.__name__} [{self.scope}] {self.name}"
+
 
 class Status(object):
     """
@@ -97,11 +100,21 @@ class Status(object):
 
 
 class AbstractItem(object):
+    def __init__(self, item: PytestItem):
+        self.__item = item
+
+    @property
+    def pytest_item(self) -> PytestItem:
+        return self.__item
+
     def pytest_runtest_makereport(self):
         raise NotImplementedError
 
     def check_skip(self, *dependencies: Dependency):
         raise NotImplementedError
+
+    def __repr__(self):
+        return repr(self.pytest_item)
 
 
 class DummyItem(AbstractItem):
@@ -129,10 +142,10 @@ class Item(AbstractItem):
                 cls.__ITEMS[item] = cls(item)
             return cls.__ITEMS[item]
         except cls.NotDependency:
-            return DummyItem()
+            return DummyItem(item)
 
     def __init__(self, item: PytestItem):
-        self.__item = item
+        super().__init__(item)
         self.__name = item.name
         self.__marker = Marker.get(item)
         if self.__marker is None:
@@ -143,10 +156,6 @@ class Item(AbstractItem):
 
     def add_report(self, report: TestReport):
         self.__status += report
-
-    @property
-    def pytest_item(self) -> PytestItem:
-        return self.__item
 
     @property
     def item_name(self):
@@ -161,6 +170,9 @@ class Item(AbstractItem):
     @property
     def display_name(self):
         return self.marker_name or self.item_name
+
+    def __repr__(self):
+        return f"{self.display_name} {super().__repr__()}"
 
     def get_name(self, scope):
         if self.marker_name:
@@ -264,8 +276,15 @@ class DependencyFinder(object):
         self.__items = {}
 
     @property
+    def node(self) -> Node:
+        return self.__node
+
+    @property
     def scope(self):
         return self.__scope
+
+    def __repr__(self):
+        return f"{self.__class__.__name__} [{self.scope}] {self.node}"
 
     def __contains__(self, item):
         return item in self.__items
