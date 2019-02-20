@@ -9,44 +9,7 @@ skipped if any of the dependencies did fail or has been skipped.
 
 __version__ = "0.5.0"
 
-import os
-import os.path
-import re
-import setuptools.command.sdist as st_sdist
-from setuptools import setup
-
-
-def _filter_file(src, dest, subst):
-    """Copy src to dest doing substitutions on the fly.
-    """
-    substre = re.compile(r'\$(%s)' % '|'.join(subst.keys()))
-
-    def repl(m):
-        return subst[m.group(1)]
-
-    with open(src, "rt") as sf, open(dest, "wt") as df:
-        while True:
-            l = sf.readline()
-            if not l:
-                break
-            df.write(re.sub(substre, repl, l))
-
-
-class sdist(st_sdist.sdist):
-    def make_release_tree(self, base_dir, files):
-        st_sdist.sdist.make_release_tree(self, base_dir, files)
-        if not self.dry_run:
-            src = "pytest_dependency.py"
-            dest = os.path.join(base_dir, src)
-            gitrevfile = ".gitrevision"
-            if hasattr(os, 'link') and os.path.exists(dest):
-                os.unlink(dest)
-            subst = {'DOC': __doc__, 'VERSION': __version__}
-            if os.path.exists(gitrevfile):
-                with open(gitrevfile, "rt") as f:
-                    subst['REVISION'] = f.readline().strip()
-            _filter_file(src, dest, subst)
-
+from setuptools import setup, find_packages
 
 setup(
     name='pytest-dependency',
@@ -64,7 +27,7 @@ setup(
         'Source Code': 'https://github.com/SelfHacked/pytest-dependency',
     },
     python_requires='>=3.6',
-    py_modules=['pytest_dependency'],
+    packages=find_packages(),
     install_requires=['pytest >= 3.6.0'],
     classifiers=[
         'Development Status :: 4 - Beta',
@@ -82,5 +45,4 @@ setup(
             'dependency = pytest_dependency',
         ],
     },
-    cmdclass={'sdist': sdist},
 )
